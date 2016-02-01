@@ -1,0 +1,349 @@
+---
+title: "Fatalities, Injuries, and Property Damage as a Result of Severe Weather"
+output: 
+  html_document:
+    keep_md: true
+---
+
+## Synopsis
+The basic goal of this report is to explore the NOAA Storm Database and answer some basic questions about severe weather events. Our overall hypothesis is that in terms of fatalities, injuries, and property damage, not all weather events are created equally, and that some will have more severe impacts than others. The report is written to be read by a government or municipal manager who might be responsible for preparing for severe weather events and will need to prioritize resources for different types of events. 
+
+## Introduction
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+## Data
+The data for this analysis come in the form of a comma-separated-value file compressed via the bzip2 algorithm to reduce its size. You can download the file from the course web site:
+
+* [Storm Data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2) [47Mb]
+
+There is also some documentation of the database available. Here you will find how some of the variables are constructed/defined.
+
+* National Weather Service [Storm Data Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
+* National Climatic Data Center Storm Events [FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf)
+
+The events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.
+
+## Data Processing
+
+The first step is to read in the data and check out what variables are included.
+```{r}
+fulldata <- read.csv("repdata-data-StormData.csv.bz2")
+names(fulldata)
+```
+
+For the basis of this report, we are mainly interested in tracking fatalities, injuries, and property damage
+across different weather events, and so our new working dataframe takes a subset of those variables.
+```{r}
+subdata <- fulldata[,c("EVTYPE","FATALITIES","INJURIES","PROPDMG","PROPDMGEXP")]
+```
+
+### Effects on Health
+
+The first hypothesis to focus on is across the United States, certain types of events will be more harmful with respect to population health than others. What are they?  I will first subset only the weather events that have at least 1 fatality or injury. 
+
+```{r}
+library(plyr)
+healthframe <- subset(subdata, FATALITIES > 0 | INJURIES > 0, select = EVTYPE:INJURIES)
+healthframe <- ddply(healthframe, "EVTYPE", numcolwise(sum))
+```
+
+Upon looking through this data, it is also determined that due to non-standardized labeling of the weather events, we will need to do some aggregation of fields by doing string searches.  This will not be 100% complete, since there are several hundred options, but it will gather all the large occurence events. Additionally, there will be an output of how all the events were consolidated. This is a lot of code, and there is some subjectivity to how you consolidate, but all operations are shown so you can always adjust to your tastes as well.
+
+```{r}
+## Get the indexed and named values for matching labels in the weather event variable
+temp <- grep("[Cc][Oo][Ll][Dd]|[Ll][Oo][Ww]", healthframe$EVTYPE)
+tempv <- grep("[Cc][Oo][Ll][Dd]|[Ll][Oo][Ww]", healthframe$EVTYPE, value = TRUE)
+## Create a new entry at bottom with the consolidated weather event and sum of values
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Cold", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+## Remove the rows we found
+healthframe <- healthframe[-temp,]
+## Add all consolidated values to the storage matrix
+consolidate <- matrix(c(tempv,rep("Cold", length(tempv))), ncol = 2)
+
+## Rinse and Repeat, and repeat, and repeat...
+temp <- grep("[Ss][Nn][Oo][Ww]|[Ww][Ii][Nn][Tt]|[Bb][Ll][Ii][Zz]|[Mm][Ii][Xx][Ee][Dd]", healthframe$EVTYPE)
+tempv <- grep("[Ss][Nn][Oo][Ww]|[Ww][Ii][Nn][Tt]|[Bb][Ll][Ii][Zz]|[Mm][Ii][Xx][Ee][Dd]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Snow", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Snow", length(tempv))), ncol = 2))
+
+temp <- grep("[Tt][Oo][Rr][Nn]", healthframe$EVTYPE)
+tempv <- grep("[Tt][Oo][Rr][Nn]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Tornado", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Tornado", length(tempv))), ncol = 2))
+
+temp <- grep("[Rr][Aa][Ii][Nn]", healthframe$EVTYPE)
+tempv <- grep("[Rr][Aa][Ii][Nn]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Rain", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Rain", length(tempv))), ncol = 2))
+
+temp <- grep("[Hh][Aa][Ii][Ll]", healthframe$EVTYPE)
+tempv <- grep("[Hh][Aa][Ii][Ll]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Hail", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Hail", length(tempv))), ncol = 2))
+
+temp <- grep("[Ww][Ii][Nn][Dd]", healthframe$EVTYPE)
+tempv <- grep("[Ww][Ii][Nn][Dd]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Wind", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Wind", length(tempv))), ncol = 2))
+
+temp <- grep("[Hh][Ee][Aa][Tt]|[Ww][Aa][Rr][Mm]", healthframe$EVTYPE)
+tempv <- grep("[Hh][Ee][Aa][Tt]|[Ww][Aa][Rr][Mm]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Heat", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Heat", length(tempv))), ncol = 2))
+
+temp <- grep("[Ff][Ll][Oo][Oo][Dd]|[Uu][Rr][Bb][Aa][Nn]", healthframe$EVTYPE)
+tempv <- grep("[Ff][Ll][Oo][Oo][Dd]|[Uu][Rr][Bb][Aa][Nn]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Flood", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Flood", length(tempv))), ncol = 2))
+
+temp <- grep("[Hh][Uu][Rr][Rr]", healthframe$EVTYPE)
+tempv <- grep("[Hh][Uu][Rr][Rr]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Hurricane", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Hurricane", length(tempv))), ncol = 2))
+
+temp <- grep("[Ii][Cc][Ee]|[Ii][Cc][Yy]|[Ff][Rr][Ee][Ee][Zz]|[Ff][Rr][Oo][Ss][Tt]", healthframe$EVTYPE)
+tempv <- grep("[Ii][Cc][Ee]|[Ii][Cc][Yy]|[Ff][Rr][Ee][Ee][Zz]|[Ff][Rr][Oo][Ss][Tt]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Ice", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Ice", length(tempv))), ncol = 2))
+
+temp <- grep("[Hh][Ee][Aa][Vv][Yy]|[Hh][Ii][Gg][Hh]|[Rr][Oo][Uu][Gg][Hh]|[Hh][Aa][Zz]", healthframe$EVTYPE)
+tempv <- grep("[Hh][Ee][Aa][Vv][Yy]|[Hh][Ii][Gg][Hh]|[Rr][Oo][Uu][Gg][Hh]|[Hh][Aa][Zz]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "High Seas", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("High Seas", length(tempv))), ncol = 2))
+
+temp <- grep("[Ll][Ii][Gg][Hh][Tt][Nn][Ii][Nn][Gg]", healthframe$EVTYPE)
+tempv <- grep("[Ll][Ii][Gg][Hh][Tt][Nn][Ii][Nn][Gg]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Lightning", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Lightning", length(tempv))), ncol = 2))
+
+temp <- grep("[Ff][Ii][Rr][Ee]", healthframe$EVTYPE)
+tempv <- grep("[Ff][Ii][Rr][Ee]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Wild Fire", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Wild Fire", length(tempv))), ncol = 2))
+
+temp <- grep("[Ff][Oo][Gg]", healthframe$EVTYPE)
+tempv <- grep("[Ff][Oo][Gg]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Fog", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Fog", length(tempv))), ncol = 2))
+
+temp <- grep("[Dd][Uu][Ss][Tt]", healthframe$EVTYPE)
+tempv <- grep("[Dd][Uu][Ss][Tt]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Dust Storm", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Dust Storm", length(tempv))), ncol = 2))
+
+temp <- grep("[Rr][Ii][Pp]", healthframe$EVTYPE)
+tempv <- grep("[Rr][Ii][Pp]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Rip Current", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Rip Current", length(tempv))), ncol = 2))
+
+temp <- grep("[Ss][Uu][Rr][Gg][Ee]", healthframe$EVTYPE)
+tempv <- grep("[Ss][Uu][Rr][Gg][Ee]", healthframe$EVTYPE, value = TRUE)
+healthframe <- rbind(healthframe, data.frame(EVTYPE = "Storm surge", FATALITIES = sum(healthframe$FATALITIES[temp]), INJURIES = sum(healthframe$INJURIES[temp])))
+healthframe <- healthframe[-temp,]
+consolidate <- rbind(consolidate, matrix(c(tempv,rep("Storm surge", length(tempv))), ncol = 2))
+
+consolidate
+```
+
+Now, to look into this, I will put together a matrix containing the weather events as columns and a first row containing fatalities and a second row containing injuries. We'll also go ahead and sort on the total occurences for each event.
+
+```{r}
+## Let's create a total that we can sort on and sort
+healthframe$total <- healthframe$FATALITIES + healthframe$INJURIES
+healthframe <- healthframe[with(healthframe, order(total, decreasing = TRUE)),]
+
+## Now we'll transpose the two data columns, fatalities and injuries, and put them in a matrix
+healthmatrix <- as.matrix(t(healthframe[,2:3]))
+
+## Name the matrix
+dimnames(healthmatrix) <- list(c("Fatalities", "Injuries"), as.vector(healthframe$EVTYPE))
+```
+
+Now we have a matrix, with a column for each weather event, and two rows for fatalities and injuries.  Let's take a look at the top 5 items on that list.
+
+```{r echo=FALSE}
+healthmatrix[,1:5]
+```
+
+
+Based on those values, the number one weather event is Tornadoes, and that data is so large in comparison, that we're going to leave it out of our plot so we can actually see the other values. Now we can create a bar chart for the top 10, minus Tornadoes in the #1 spot.
+
+```{r fig.align="center", fig.width=10}
+barplot(healthmatrix[,2:10], col = c("red","blue"), legend.text = rownames(healthmatrix), xlab = "Weather Event \n(Not Including Tornado in First Position)", ylab = "People Affected", main = "Fatalities/Injuries by Weather Event Across the US \n(Tornado Removed for Scale with 5661 Fat./ 91407 Inj.)")
+```
+
+As you can see, there's certainly room for interpretation when ordering these. I put them in order by total people effected.  You could also arrange by fatalities which would change the ordering a bit.
+
+### Damage to Property
+
+The second, similar, hypothesis is that certain weather events will have a greater impact on personal property damage. To look at this, we will pull out the data pertaining to property damage from the full data set. I will first subset only the weather events that have property damage greater than $0.
+
+```{r}
+damageframe <- subset(subdata, PROPDMG > 0, select = c(1,4,5))
+head(damageframe)
+```
+
+Now you'll notice that the last column, `PROPDMGEXP` has single characters in it.  Let's look at all the possibilities.
+```{r echo=FALSE}
+table(damageframe$PROPDMGEXP)
+```
+
+Now according to the [National Weather Service Storm Data Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) on page 12, section 2.7, the only characters we should see are "K" for thousands, "M" for millions, and "B" for billions. So let's subset again only for those, since anything in the dollars or hundreds of dollars is going to be lost when compared with damages in the billions. Then we'll apply the correct factor to the actual dollar amount in `PROPDMG`.
+
+```{R}
+## Find all the records with correct values in PROPDMGEXP and subset them out
+goodfactor <- grep("[Kk]|[Mm]|[Bb]", damageframe$PROPDMGEXP)
+damageframe <- damageframe[goodfactor,]
+
+## Multiply the "k's" by 1,000
+temp <- grep("[Kk]", damageframe$PROPDMGEXP)
+damageframe[temp,2] <- damageframe[temp,2]*1000
+
+## Multiply the "m's" by 1,000,000
+temp <- grep("[Mm]", damageframe$PROPDMGEXP)
+damageframe[temp,2] <- damageframe[temp,2]*1000000
+
+## Multiply the "b's" by 1,000,000,000
+temp <- grep("[Bb]", damageframe$PROPDMGEXP)
+damageframe[temp,2] <- damageframe[temp,2]*1000000000
+```
+
+Now that we've got everything factored out to the real dollar amounts, let's aggregate everything into a nice clean frame that just has the weather event and the total dollar amount of property damage.
+
+```{r}
+damageframe <- ddply(damageframe[,1:2], "EVTYPE", numcolwise(sum))
+head(damageframe,10)
+```
+
+As we can see here, looks like we're going to need to do the same cleaning again of the event types, and we should be able to reuse most of the code.  Again, I'll keep a separate table of all the aggregation. Remember, this is completely subjective as to how you want to group these.
+
+```{r}
+## Get the indexed and named values for matching labels in the weather event variable
+temp <- grep("[Ff][Ll][Oo][Oo][Dd]|[Uu][Rr][Bb][Aa][Nn]", damageframe$EVTYPE)
+tempv <- grep("[Ff][Ll][Oo][Oo][Dd]|[Uu][Rr][Bb][Aa][Nn]", damageframe$EVTYPE, value = TRUE)
+## Create a new entry at bottom with the consolidated weather event and sum of values
+damageframe <- rbind(damageframe, data.frame(EVTYPE = "Flood", PROPDMG = sum(damageframe$PROPDMG[temp])))
+## Remove the rows we found
+damageframe <- damageframe[-temp,]
+## Add all consolidated values to the storage matrix
+consolidatedmg <- matrix(c(tempv,rep("Flood", length(tempv))), ncol = 2)
+
+## Rinse and Repeat, and repeat, and repeat...
+temp <- grep("[Hh][Aa][Ii][Ll]", damageframe$EVTYPE)
+tempv <- grep("[Hh][Aa][Ii][Ll]", damageframe$EVTYPE, value = TRUE)
+damageframe <- rbind(damageframe, data.frame(EVTYPE = "Hail", PROPDMG = sum(damageframe$PROPDMG[temp])))
+damageframe <- damageframe[-temp,]
+consolidatedmg <- rbind(consolidatedmg, matrix(c(tempv,rep("Hail", length(tempv))), ncol = 2))
+
+temp <- grep("[Ss][Nn][Oo][Ww]|[Ww][Ii][Nn][Tt]|[Bb][Ll][Ii][Zz]|[Mm][Ii][Xx][Ee][Dd]", damageframe$EVTYPE)
+tempv <- grep("[Ss][Nn][Oo][Ww]|[Ww][Ii][Nn][Tt]|[Bb][Ll][Ii][Zz]|[Mm][Ii][Xx][Ee][Dd]", damageframe$EVTYPE, value = TRUE)
+damageframe <- rbind(damageframe, data.frame(EVTYPE = "Snow", PROPDMG = sum(damageframe$PROPDMG[temp])))
+damageframe <- damageframe[-temp,]
+consolidatedmg <- rbind(consolidatedmg, matrix(c(tempv,rep("Snow", length(tempv))), ncol = 2))
+
+temp <- grep("[Ff][Ii][Rr][Ee]", damageframe$EVTYPE)
+tempv <- grep("[Ff][Ii][Rr][Ee]", damageframe$EVTYPE, value = TRUE)
+damageframe <- rbind(damageframe, data.frame(EVTYPE = "Fire", PROPDMG = sum(damageframe$PROPDMG[temp])))
+damageframe <- damageframe[-temp,]
+consolidatedmg <- rbind(consolidatedmg, matrix(c(tempv,rep("Fire", length(tempv))), ncol = 2))
+
+temp <- grep("[Hh][Uu][Rr][Rr]", damageframe$EVTYPE)
+tempv <- grep("[Hh][Uu][Rr][Rr]", damageframe$EVTYPE, value = TRUE)
+damageframe <- rbind(damageframe, data.frame(EVTYPE = "Hurricane", PROPDMG = sum(damageframe$PROPDMG[temp])))
+damageframe <- damageframe[-temp,]
+consolidatedmg <- rbind(consolidatedmg, matrix(c(tempv,rep("Hurricane", length(tempv))), ncol = 2))
+
+temp <- grep("[Tt][Oo][Rr][Nn][Aa][Dd][Oo]", damageframe$EVTYPE)
+tempv <- grep("[Tt][Oo][Rr][Nn][Aa][Dd][Oo]", damageframe$EVTYPE, value = TRUE)
+damageframe <- rbind(damageframe, data.frame(EVTYPE = "Tornado", PROPDMG = sum(damageframe$PROPDMG[temp])))
+damageframe <- damageframe[-temp,]
+consolidatedmg <- rbind(consolidatedmg, matrix(c(tempv,rep("Tornado", length(tempv))), ncol = 2))
+
+temp <- grep("[Cc][Oo][Ll][Dd]|[Ff][Rr][Oo][Ss][Tt]|[Ff][Rr][Ee][Ee][Zz]|[Ii][Cc][Ee]", damageframe$EVTYPE)
+tempv <- grep("[Cc][Oo][Ll][Dd]|[Ff][Rr][Oo][Ss][Tt]|[Ff][Rr][Ee][Ee][Zz]|[Ii][Cc][Ee]", damageframe$EVTYPE, value = TRUE)
+damageframe <- rbind(damageframe, data.frame(EVTYPE = "Cold/Ice", PROPDMG = sum(damageframe$PROPDMG[temp])))
+damageframe <- damageframe[-temp,]
+consolidatedmg <- rbind(consolidatedmg, matrix(c(tempv,rep("Cold/Ice", length(tempv))), ncol = 2))
+
+temp <- grep("[Ww][Ii][Nn][Dd]", damageframe$EVTYPE)
+tempv <- grep("[Ww][Ii][Nn][Dd]", damageframe$EVTYPE, value = TRUE)
+damageframe <- rbind(damageframe, data.frame(EVTYPE = "Wind", PROPDMG = sum(damageframe$PROPDMG[temp])))
+damageframe <- damageframe[-temp,]
+consolidatedmg <- rbind(consolidatedmg, matrix(c(tempv,rep("Wind", length(tempv))), ncol = 2))
+
+temp <- grep("[Ll][Ii][Gg][Hh][Tt][Nn]", damageframe$EVTYPE)
+tempv <- grep("[Ll][Ii][Gg][Hh][Tt][Nn]", damageframe$EVTYPE, value = TRUE)
+damageframe <- rbind(damageframe, data.frame(EVTYPE = "Lightning", PROPDMG = sum(damageframe$PROPDMG[temp])))
+damageframe <- damageframe[-temp,]
+consolidatedmg <- rbind(consolidatedmg, matrix(c(tempv,rep("Lightning", length(tempv))), ncol = 2))
+
+temp <- grep("[Rr][Aa][Ii][Nn]|[Tt][Hh][Uu][Nn]", damageframe$EVTYPE)
+tempv <- grep("[Rr][Aa][Ii][Nn]|[Tt][Hh][Uu][Nn]", damageframe$EVTYPE, value = TRUE)
+damageframe <- rbind(damageframe, data.frame(EVTYPE = "Rain/Thunderstorms", PROPDMG = sum(damageframe$PROPDMG[temp])))
+damageframe <- damageframe[-temp,]
+consolidatedmg <- rbind(consolidatedmg, matrix(c(tempv,rep("Rain/Thunderstorms", length(tempv))), ncol = 2))
+
+temp <- grep("[Ss][Uu][Rr][Gg][Ee]", damageframe$EVTYPE)
+tempv <- grep("[Ss][Uu][Rr][Gg][Ee]", damageframe$EVTYPE, value = TRUE)
+damageframe <- rbind(damageframe, data.frame(EVTYPE = "Storm Surge", PROPDMG = sum(damageframe$PROPDMG[temp])))
+damageframe <- damageframe[-temp,]
+consolidatedmg <- rbind(consolidatedmg, matrix(c(tempv,rep("Storm Surge", length(tempv))), ncol = 2))
+
+temp <- grep("[Tt][Rr][Oo][Pp]", damageframe$EVTYPE)
+tempv <- grep("[Tt][Rr][Oo][Pp]", damageframe$EVTYPE, value = TRUE)
+damageframe <- rbind(damageframe, data.frame(EVTYPE = "Tropical Storm", PROPDMG = sum(damageframe$PROPDMG[temp])))
+damageframe <- damageframe[-temp,]
+consolidatedmg <- rbind(consolidatedmg, matrix(c(tempv,rep("Tropical Storm", length(tempv))), ncol = 2))
+
+consolidatedmg
+```
+
+Now that we have consolidated a lot of the errant labeling, we can order the table and convert to a columnwise matrix for plotting.
+
+```{r}
+## Let's sort the data by most expensive first
+damageframe <- damageframe[with(damageframe, order(PROPDMG, decreasing = TRUE)),]
+
+## Transpose the damage column and create a matrix
+damagematrix <- as.matrix(t(damageframe[,2]))
+
+## Name the columns with the weather events
+dimnames(damagematrix) <- list("Prop.Damage", as.vector(damageframe$EVTYPE))
+```
+
+As before, now we have a matrix with a column for each weather event and one row for property damages in dollars.  Let's take a look at the top 5 items on that list.
+
+```{r echo=FALSE}
+damagematrix[,1:5]
+```
+
+That's a lot of money. Let's plot out the first 10.  
+
+```{r fig.align="center", fig.width=12}
+barplot(damagematrix[,1:10], col = c("red","blue"), xlab = "weather Event", ylab = "Property Damage ($)", main = "Property Damage by Weather Event Across the US")
+```
+
+
+## Results
+In the end, weather can hurt.  Both population and pockets can suffer greatly from extreme weather.  
+
+In the case of population health, we saw that the biggest culprit was the Tornado in both fatalities and injuries by almost a factor of 10. High Winds, High Heat, and Flooding were the next in line, with varying degrees of fatalities/injuries.
+
+For Property Damage, Flooding was the big winner, with all the storms and storm related items following behind.  It's hard to distinguish exactly what the main driver is in most cases, i.e. a Thunderstorm can have high winds, high rain, lightning and flooding - which exactly is the culprit?  Regardless, it hurts.
