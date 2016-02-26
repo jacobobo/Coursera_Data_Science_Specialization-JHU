@@ -1,0 +1,60 @@
+---
+title: "Exercise Performance Quality"
+author: "JBrand"
+output: 
+  html_document:
+    keep_md: true
+---
+
+## Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset).
+
+The data itself is available at the following two links:  
+1. Training: [https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)  
+2. Testing: [https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+## Importing, Cleaning and Splitting Data
+
+The first step is to import the .csv files listed above.
+```{r cache=TRUE}
+training <- read.csv("pml-training.csv", na.strings = c("NA", "#DIV/0!", ""))
+testing <- read.csv("pml-testing.csv", na.strings = c("NA", "#DIV/0!", ""))
+```
+Now that the files are loaded, we need to do some cleaning. 160 variables is a lot to process, and my computer doesn't have that kind of HP. Right off the bat, the first 7 columns are identification only, so they can go, and many columns are empty, so they will be removed as well.
+```{r cache=TRUE}
+## Remove the first 7 columns
+training <- training[,-c(1:7)]
+testing <- testing[,-c(1:7)]
+
+## Remove the NA columns
+training <- training[, colSums(is.na(training)) == 0]
+testing <- testing[, colSums(is.na(testing)) == 0]
+```
+Now that we've reduced the variable count from 160 to 53, we have something more manageable to work with. In this case, since we have a very large training set, we have the ability to break it down into a training and validation set. So we'll do that now.
+```{r cache=TRUE}
+library(caret)
+set.seed(55722)
+inTrain <- createDataPartition(training$classe, p = 0.7, list = FALSE)
+trainSet <- training[inTrain,]
+validSet <- training[-inTrain,]
+```
+
+## Analysis
+Based on the courses, it's been stated that the best prediction algorithms will be based on random forests, boosting, and some combination through ensembling.  Since there is a lot of data available, I will start with random forests on its own and see if the accuracy/out-of-sample error hold up.
+```{r cache=TRUE}
+modFit <- train(classe~.,data = trainSet, method = "rf")
+```
+Now that we've trained a model, we can check it out on our validation set that we created.
+```{r cache=TRUE}
+valPredict <- predict(modFit, validSet)
+confusionMatrix(valPredict,validSet$classe)
+```
+As shown, there is incredible accuracy of __99.4%__ which means an out-of-sample error of __0.6%__.  That's certainly good enough for this analysis. 
+
+## Conclusion
+Now that we've created a model based on the training set and validated it using the validation set, we can finally predict the test set provided.
+```{r cache=TRUE}
+testPredict <- predict(modFit, testing)
+testPredict
+```
+So, using the random forests model created, the test cases were evaluated. Based on the validation that we did, we can be very confident that these predicted values are accurate.
