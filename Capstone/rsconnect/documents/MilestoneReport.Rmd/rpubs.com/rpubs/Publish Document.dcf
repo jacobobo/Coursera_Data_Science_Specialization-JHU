@@ -1,0 +1,7 @@
+name: Publish Document
+account: rpubs
+server: rpubs.com
+bundleId:
+        https://api.rpubs.com/api/v1/document/161359/b71bed87844143af8e8f88d3cffd0d30
+url: http://rpubs.com/jacobobo/161359
+when: 1458139013.67699
